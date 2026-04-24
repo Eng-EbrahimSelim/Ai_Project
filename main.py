@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import filedialog
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageEnhance
 import heapq
 import random
 from collections import deque
@@ -114,7 +114,7 @@ def shuffle(state, steps=50):
 class App:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("N-Puzzle AI (A* - BFS - DFS)")
+        self.root.title("N-Puzzle AI")
         self.root.geometry("1000x650")
 
         self.mode = "number"
@@ -134,7 +134,6 @@ class App:
         tk.Button(self.sidebar, text="Image Puzzle", command=lambda:self.set_mode("image"), bg="#444", fg="white").pack(pady=5)
         tk.Button(self.sidebar, text="Upload Image", command=self.load_image, bg="#555", fg="white").pack(pady=10)
 
-        # Algorithm selector
         self.algorithm = tk.StringVar(value="A*")
         tk.Label(self.sidebar, text="Algorithm", fg="white", bg="#222").pack(pady=10)
         tk.OptionMenu(self.sidebar, self.algorithm, "A*", "BFS", "DFS").pack()
@@ -152,6 +151,7 @@ class App:
 
         self.tiles = []
         self.tk_tiles = []
+        self.empty_tile = None
 
         self.canvas.bind("<Configure>", self.on_resize)
         self.canvas.bind("<Button-1>", self.on_click)
@@ -182,12 +182,18 @@ class App:
         th = size // SIZE
 
         self.tiles = []
+        self.tk_tiles = []
+
         for i in range(SIZE):
             for j in range(SIZE):
-                tile = img.crop((j*tw, i*th, (j+1)*tw, (i+1)*th))
+                tile = img.crop((j*tw, i*th, (j+1)*tw, (i+1)*tw))
                 self.tiles.append(tile)
+                self.tk_tiles.append(ImageTk.PhotoImage(tile))
 
-        self.tk_tiles = [ImageTk.PhotoImage(t) for t in self.tiles]
+        # 🔥 empty tile = SAME image but LIGHTER
+        last_tile = self.tiles[-1]
+        light = ImageEnhance.Brightness(last_tile).enhance(1.6)
+        self.empty_tile = ImageTk.PhotoImage(light)
 
     # ================= DRAW =================
     def draw(self):
@@ -207,19 +213,37 @@ class App:
                 x = ox + j*tile
                 y = oy + i*tile
 
+                # ===== IMAGE MODE =====
                 if self.mode == "image" and self.tk_tiles:
-                    img_index = val-1 if val != 0 else len(self.tk_tiles)-1
-                    self.canvas.create_image(x, y, anchor="nw", image=self.tk_tiles[img_index])
 
+                    if val != 0:
+                        img_index = val - 1
+                        self.canvas.create_image(
+                            x, y, anchor="nw",
+                            image=self.tk_tiles[img_index]
+                        )
+                    else:
+                        # 🔥 LIGHTENED SAME IMAGE (NOT HIDDEN)
+                        self.canvas.create_image(
+                            x, y, anchor="nw",
+                            image=self.empty_tile
+                        )
+
+                # ===== NUMBER MODE =====
                 else:
                     color = "gray" if val == 0 else "lightblue"
                     self.canvas.create_rectangle(x,y,x+tile,y+tile, fill=color)
+
                     if val != 0:
-                        self.canvas.create_text(x+tile//2,y+tile//2, text=str(val), font=("Arial", tile//4))
+                        self.canvas.create_text(
+                            x+tile//2, y+tile//2,
+                            text=str(val),
+                            font=("Arial", tile//4)
+                        )
 
                 self.canvas.create_rectangle(x,y,x+tile,y+tile, outline="white")
 
-    # ================= APPLY MOVE =================
+    # ================= APPLY =================
     def apply(self, move):
         z = self.state.index(0)
         x,y = divmod(z,SIZE)
@@ -246,7 +270,6 @@ class App:
         self.step = 0
         self.steps_label.config(text=f"Steps: {len(self.solution)}")
 
-    # ================= STEPS =================
     def next_step(self):
         if self.step < len(self.solution):
             self.apply(self.solution[self.step])
@@ -258,18 +281,15 @@ class App:
             self.next_step()
             self.root.after(250, self.auto)
 
-    # ================= SHUFFLE =================
     def do_shuffle(self):
         self.state = shuffle(GOAL)
         self.draw()
 
-    # ================= RESIZE =================
     def on_resize(self, event):
         if self.mode == "image" and hasattr(self, "original_img"):
             self.prepare_tiles()
         self.draw()
 
-    # ================= CLICK =================
     def on_click(self, event):
         w = self.canvas.winfo_width()
         h = self.canvas.winfo_height()
@@ -297,5 +317,4 @@ class App:
             self.draw()
 
 
-# RUN
 App()
